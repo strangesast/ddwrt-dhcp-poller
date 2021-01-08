@@ -1,0 +1,6 @@
+version: '3.7'
+services:
+  poller:
+    build: .
+    volumes:
+      - ~/.ssh/:/root/.ssh/
