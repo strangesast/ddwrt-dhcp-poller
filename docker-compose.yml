@@ -2,5 +2,7 @@ version: '3.7'
 services:
   poller:
     build: .
+    network_mode: 'host'
+    restart: always
     volumes:
       - ~/.ssh/:/root/.ssh/
