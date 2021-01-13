@@ -129,9 +129,10 @@ async def poll(producer):
                     value=json.dumps(entry).encode(),
                     timestamp=None,
                 )
-        partitions = await producer.partitions_for(DHCP_TOPIC)
-        partition = random.choice(tuple(partitions))
-        await producer.send_batch(batch, DHCP_TOPIC, partition=partition)
+        if batch.record_count():
+            partitions = await producer.partitions_for(DHCP_TOPIC)
+            partition = random.choice(tuple(partitions))
+            await producer.send_batch(batch, DHCP_TOPIC, partition=partition)
 
     for router_ip in ["10.0.0.1", "10.0.0.2"]:
         with suppress(SSHException):
