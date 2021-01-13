@@ -1,34 +1,67 @@
+import matplotlib
+
+matplotlib.use("Agg")
+
 import json
 from itertools import islice
+import matplotlib.pyplot as plt
+from collections import defaultdict
 from datetime import datetime
 from kafka import KafkaConsumer, TopicPartition
-
-topic = "dhcp"
+from pprint import pprint
 
 consumer = KafkaConsumer(auto_offset_reset="earliest")
 
-offsets = consumer.end_offsets(
-    [
-        TopicPartition(topic, partition)
-        for partition in consumer.partitions_for_topic(topic)
-    ]
-)
 
-tp = next(iter(offsets))
+def read_whole_topic(topic):
+    offsets = consumer.end_offsets(
+        [
+            TopicPartition(topic, partition)
+            for partition in consumer.partitions_for_topic(topic)
+        ]
+    )
+    tp = next(iter(offsets))
+    last_offset = offsets[tp]
+    consumer.assign([tp])
+    consumer.seek_to_beginning(tp)
 
-last_offset = offsets[tp]
+    l = []
+    for msg in islice(consumer, last_offset):
+        k, v = msg.key.decode(), json.loads(msg.value)
+        dt = datetime.fromtimestamp(msg.timestamp / 1000.0)
+        l.append((k, v, dt))
+    consumer.unsubscribe()
+    return l
 
 
-consumer.assign([tp])
-consumer.seek_to_beginning(tp)
+dhcp_msgs = read_whole_topic("dhcp")
 
 hostnames = {}
-for msg in islice(consumer, last_offset):
-    k, v = msg.key.decode(), json.loads(msg.value)
+for k, v, _ in dhcp_msgs:
     hostnames[k] = (v["ip"], v["hostname"])
 
-consumer.unsubscribe()
+rssi_msgs = read_whole_topic("rssi")
 
+d = defaultdict(lambda: defaultdict(list))
+# macs = set()
+for k, v, dt in rssi_msgs:
+    d[k][v["ap"]].append((dt, v["rssi"]))
+    # macs.add(k)
+
+# for ss in s:
+#    print(ss, hostnames.get(ss))
+
+for mac, v in d.items():
+    fig = plt.figure(figsize=(12, 8))
+    fig.suptitle(hn[1] if (hn := hostnames.get(mac)) else mac, fontsize=16)
+    ax = fig.add_subplot(111)
+    for vv in v.values():
+        x, y = zip(*vv)
+        ax.plot(x, y, ".")
+
+    fig.savefig(f"rssi-{mac}.png")
+
+"""
 consumer.subscribe(topics=["rssi"])
 for msg in consumer:
     k, v = msg.key.decode(), json.loads(msg.value)
@@ -40,6 +73,7 @@ for msg in consumer:
         v["iface"],
         v["rssi"],
     )
+"""
 
 """
 macs = set()
